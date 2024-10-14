@@ -9,100 +9,101 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/finance/PaymentSplitter.sol";
 
-contract MyToken is ERC1155, Ownable, ERC1155Pausable, ERC1155Supply,PaymentSplitter {
+contract MyToken is ERC1155, Ownable, ERC1155Pausable, ERC1155Supply, PaymentSplitter {
 
-    uint256 public publicprice = 0.02 ether;
-    uint256 public allowListPrice = 0.01 ether;
-    uint256 public MaxSupply = 2;
-    uint256 public maxPerWallet = 3;
+    uint256 public publicMintPrice = 0.02 ether;
+    uint256 public allowListMintPrice = 0.01 ether;
+    uint256 public maxTokenSupply = 2;
+    uint256 public maxTokensPerWallet = 3;
 
-    bool public publicListMintopen = false;
-    bool public allowListMintopen = false;
+    bool public isPublicMintOpen = false;
+    bool public isAllowListMintOpen = false;
 
-    mapping(address => bool)public allowList;
-    mapping(address => uint256) public purchasesPerWallet;
+    mapping(address => bool) public allowList;
+    mapping(address => uint256) public walletMintCount;
 
     constructor(
-        address[] memory _payees,
-        uint256[] memory _shares
-    )
-    {
-        ERC1155("ipfs://Qmaa6TuP2s9pSKczHF4rwWhTKUdygrrDs8RmYYqCjP3Hye/");
-        PaymentSplitter(_payees, _shares);
+        address[] memory payees,
+        uint256[] memory shares
+    ) ERC1155("ipfs://Qmaa6TuP2s9pSKczHF4rwWhTKUdygrrDs8RmYYqCjP3Hye/") 
+      PaymentSplitter(payees, shares) {}
+
+    function setURI(string memory newUri) external onlyOwner {
+        _setURI(newUri);
     }
 
-    function setURI(string memory newuri) public onlyOwner {
-        _setURI(newuri);
-    }
-
-    function pause() public onlyOwner {
+    function pauseContract() external onlyOwner {
         _pause();
     }
 
-    function unpause() public onlyOwner {
+    function unpauseContract() external onlyOwner {
         _unpause();
     }
 
-    function setAllowList(address[] calldata addresses)external onlyOwner{
-        for(uint i=0;i<addresses.length;i++){
+    function updateAllowList(address[] calldata addresses) external onlyOwner {
+        for (uint256 i = 0; i < addresses.length; i++) {
             allowList[addresses[i]] = true;
         }
     }
-    function editWindows(
-        bool _publicListopen,
-        bool _allowListmintopen
-    ) external onlyOwner{
-        publicListMintopen = _publicListopen;
-        allowListMintopen = _allowListmintopen;
+
+    function setMintWindows(
+        bool publicMintOpen,
+        bool allowListMintOpen
+    ) external onlyOwner {
+        isPublicMintOpen = publicMintOpen;
+        isAllowListMintOpen = allowListMintOpen;
     }
 
-    function publicMint(uint256 id, uint256 amount)
-        public 
-        payable
-    {
-        require(publicListMintopen,"Not allowed to mint publically");
-        require(msg.value == publicprice * amount,"Not enough value");
-        mint(id, amount);
-        
-    }
-    function allowListmint(uint id, uint amount)public payable{
-        require(allowList[msg.sender],"You are not on the allowList");
-        require(allowListMintopen,"Not allowed to mint the allowLisy");
-        require(msg.value == allowListPrice * amount, "Not enough value");
-        mint(id, amount);
+    function mintPublic(uint256 tokenId, uint256 amount) external payable {
+        require(isPublicMintOpen, "Public minting is not open");
+        require(msg.value == publicMintPrice * amount, "Incorrect payment amount");
+        _mintTokens(tokenId, amount);
     }
 
-    function uri(uint256 _id)public view virtual override returns(string memory){
-        require(exists(_id),"URI non existent token");
-        return string(abi.encodePacked(super.uri(_id), Strings.toString(_id), ".json"));
+    function mintAllowList(uint256 tokenId, uint256 amount) external payable {
+        require(allowList[msg.sender], "Address not on allow list");
+        require(isAllowListMintOpen, "Allow list minting is not open");
+        require(msg.value == allowListMintPrice * amount, "Incorrect payment amount");
+        _mintTokens(tokenId, amount);
     }
 
-    function mint(uint256 id,uint256 amount) internal{
-        require(purchasesPerWallet[msg.sender]<= maxPerWallet,"Maximum purchase limit reached");
-        require(totalSupply(id) + amount <= MaxSupply, "Supply limit reached");
-        _mint(msg.sender, id, amount, "");   
-        require(id < 2,"Sorry, you are trying to mint the wrong NFT"); 
-        purchasesPerWallet[msg.sender] += amount;   
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        require(exists(tokenId), "URI query for nonexistent token");
+        return string(abi.encodePacked(super.uri(tokenId), Strings.toString(tokenId), ".json"));
     }
 
-    function withdraw(address _addr) external onlyOwner{
-        uint256 balance = address(this).balance;
-        payable(_addr).transfer(balance);
+    function _mintTokens(uint256 tokenId, uint256 amount) internal {
+        require(walletMintCount[msg.sender] + amount <= maxTokensPerWallet, 
+            "Exceeded max tokens per wallet");
+        require(totalSupply(tokenId) + amount <= maxTokenSupply, 
+            "Exceeded max supply for token");
+        require(tokenId < 2, "Invalid token ID");
+
+        _mint(msg.sender, tokenId, amount, "");
+        walletMintCount[msg.sender] += amount;
     }
 
-    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
-        public
-        onlyOwner
-    {
-        _mintBatch(to, ids, amounts, data);
+    function withdrawFunds(address recipient) external onlyOwner {
+        uint256 contractBalance = address(this).balance;
+        payable(recipient).transfer(contractBalance);
+    }
+
+    function mintBatchTokens(
+        address to, 
+        uint256[] memory tokenIds, 
+        uint256[] memory amounts, 
+        bytes memory data
+    ) external onlyOwner {
+        _mintBatch(to, tokenIds, amounts, data);
     }
 
     // The following functions are overrides required by Solidity.
-
-    function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
-        internal
-        override(ERC1155, ERC1155Pausable, ERC1155Supply)
-    {
-        super._update(from, to, ids, values);
+    function _update(
+        address from, 
+        address to, 
+        uint256[] memory tokenIds, 
+        uint256[] memory values
+    ) internal override(ERC1155, ERC1155Pausable, ERC1155Supply) {
+        super._update(from, to, tokenIds, values);
     }
 }
