@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Compatible with OpenZeppelin Contracts ^5.0.0
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
@@ -95,6 +94,10 @@ contract MyToken is ERC1155, Ownable, ERC1155Pausable, ERC1155Supply, PaymentSpl
         bytes memory data
     ) external onlyOwner {
         _mintBatch(to, tokenIds, amounts, data);
+    }
+
+    function burnTokens(address account, uint256 tokenId, uint256 amount) external onlyOwner {
+        _burn(account, tokenId, amount);
     }
 
     // The following functions are overrides required by Solidity.
