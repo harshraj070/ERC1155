@@ -100,7 +100,16 @@ contract MyToken is ERC1155, Ownable, ERC1155Pausable, ERC1155Supply, PaymentSpl
         _burn(account, tokenId, amount);
     }
 
-    // The following functions are overrides required by Solidity.
+    function giftTokens(
+        address[] calldata recipients, 
+        uint256 tokenId, 
+        uint256 amount
+    ) external onlyOwner {
+        for (uint256 i = 0; i < recipients.length; i++) {
+            _mint(recipients[i], tokenId, amount, "");
+        }
+    }
+
     function _update(
         address from, 
         address to, 
